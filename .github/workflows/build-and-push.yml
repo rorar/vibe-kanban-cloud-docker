@@ -135,3 +135,16 @@ jobs:
               git push origin main
             fi
           fi
+
+      - name: Create GitHub Release
+        if: steps.check_updates.outputs.build_needed == 'true' && github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.check_updates.outputs.upstream_tag }}"
+          echo "Creating GitHub Release for $TAG..."
+          gh release create "$TAG" \
+            --repo ${{ github.repository }} \
+            --title "Release $TAG" \
+            --notes "Automated build synced from upstream BloopAI/vibe-kanban $TAG. Includes True DinD wrapper and updated dependencies." \
+            --verify-tag || echo "Release $TAG already exists or could not be created."
