@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    image: 
     restart: unless-stopped
     ports:
       - "80:80"
