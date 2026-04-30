@@ -23,9 +23,10 @@ ENV_FILE="/data/.env"
 if [ ! -f "$ENV_FILE" ]; then
     echo "First run detected: Generating secure secrets in /data/.env..."
     touch "$ENV_FILE"
-    echo "DB_PASSWORD=$(openssl rand -base64 48 | tr -d '\n')" >> "$ENV_FILE"
-    echo "VIBEKANBAN_REMOTE_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')" >> "$ENV_FILE"
-    echo "ELECTRIC_ROLE_PASSWORD=$(openssl rand -base64 48 | tr -d '\n')" >> "$ENV_FILE"
+    # Use hex instead of base64 to ensure URL-safety (prevents @ or / breaking the postgres:// connection string)
+    echo "DB_PASSWORD=$(openssl rand -hex 32)" >> "$ENV_FILE"
+    echo "VIBEKANBAN_REMOTE_JWT_SECRET=$(openssl rand -hex 32)" >> "$ENV_FILE"
+    echo "ELECTRIC_ROLE_PASSWORD=$(openssl rand -hex 32)" >> "$ENV_FILE"
     chown "$PUID":"$PGID" "$ENV_FILE"
 else
     echo "Existing configuration found in /data/.env. Loading secrets..."
