@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   schedule:
-    - cron: '0 0 * * *' # Daily at midnight
+    - cron: '0 */6 * * *' # Check for updates every 6 hours
   workflow_dispatch:
 
 env:
@@ -13,10 +13,10 @@ env:
   WRAPPER_IMAGE_NAME: ${{ github.repository_owner }}/vibe-kanban-cloud
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -29,7 +29,46 @@ jobs:
           repository: BloopAI/vibe-kanban
           path: upstream
 
+      - name: Sync versions and check for updates
+        id: check_updates
+        run: |
+          UPSTREAM_COMPOSE="./upstream/crates/remote/docker-compose.prod.yml"
+          OUR_COMPOSE="./docker-compose.prod.yml"
+          
+          # Extract versions
+          CADDY_IMG=$(grep -oP 'image:\s*\Kcaddy:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
+          PG_IMG=$(grep -oP 'image:\s*\Kpostgres:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
+          ELEC_IMG=$(grep -oP 'image:\s*\Kelectricsql/electric:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
+          
+          echo "Upstream versions -> Caddy: $CADDY_IMG, Postgres: $PG_IMG, Electric: $ELEC_IMG"
+          
+          # Replace in our compose file
+          sed -i "s|image: caddy:.*|image: $CADDY_IMG|g" "$OUR_COMPOSE"
+          sed -i "s|image: postgres:.*|image: $PG_IMG|g" "$OUR_COMPOSE"
+          sed -i "s|image: electricsql/electric:.*|image: $ELEC_IMG|g" "$OUR_COMPOSE"
+          
+          # Track upstream commit to trigger build when upstream code changes
+          cd upstream
+          UPSTREAM_SHA=$(git rev-parse HEAD)
+          cd ..
+          
+          touch .upstream_sha
+          PREV_SHA=$(cat .upstream_sha)
+          
+          # Check if our compose file was modified
+          git diff --quiet "$OUR_COMPOSE" || HAS_DEPS_CHANGED=true
+          
+          if [ "$UPSTREAM_SHA" != "$PREV_SHA" ] || [ "$HAS_DEPS_CHANGED" = "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "${{ github.event_name }}" == "push" ]; then
+            echo "Updates found or forced build."
+            echo "$UPSTREAM_SHA" > .upstream_sha
+            echo "build_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No updates found in upstream. Skipping build."
+            echo "build_needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Log in to the Container registry
+        if: steps.check_updates.outputs.build_needed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -37,6 +76,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push remote-server
+        if: steps.check_updates.outputs.build_needed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./upstream
@@ -45,8 +85,20 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.SERVER_IMAGE_NAME }}:latest
 
       - name: Build and push DinD Wrapper
+        if: steps.check_updates.outputs.build_needed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.WRAPPER_IMAGE_NAME }}:latest
+
+      - name: Commit updated versions and SHA
+        if: steps.check_updates.outputs.build_needed == 'true' && github.event_name != 'pull_request'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docker-compose.prod.yml .upstream_sha
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: sync upstream dependencies and update SHA [skip ci]"
+            git push
+          fi
