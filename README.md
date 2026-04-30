@@ -22,6 +22,7 @@ To prevent cluttering your UnRAID WebUI (or Portainer interface) with multiple u
 
 *   **Pristine UnRAID Integration**: Exposes the entire stack via a single XML template without spamming the Docker tab.
 *   **Fully Automated Upstream Sync**: A GitHub Action runs every 6 hours. It checks the official `BloopAI/vibe-kanban` repository for new commits or updated dependency versions (Caddy, Postgres, ElectricSQL). If updates are found, it automatically syncs the versions, builds a fresh DinD image, and publishes it to GHCR.
+*   **Weekly Security Rebuilds**: Every Sunday, the pipeline forces a full rebuild even if no upstream changes were detected. This ensures your deployment always includes the latest OS security patches and base image updates.
 *   **Zero-Touch Initial Setup**: Automatically generates the required 48-character base64 secrets on the first run.
 *   **Flexible Proxy & SSL Routing**: Built-in support for both standalone deployments and setups behind external reverse proxies (like Nginx Proxy Manager or Traefik).
 
