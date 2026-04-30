@@ -128,18 +128,24 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add docker-compose.yml .upstream_sha
+          
+          # Only commit if there are actual file changes
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: sync upstream dependencies and update to ${{ steps.check_updates.outputs.upstream_tag }} [skip ci]"
             git pull --rebase origin main
-            
-            # Create a local tag to match upstream
-            TAG="${{ steps.check_updates.outputs.upstream_tag }}"
-            if ! git rev-parse "$TAG" >/dev/null 2>&1; then
-              git tag "$TAG"
-              git push origin main --tags
-            else
-              git push origin main
-            fi
+            git push origin main
+          fi
+
+      - name: Create Git Tag
+        if: steps.check_updates.outputs.build_needed == 'true' && github.event_name != 'pull_request'
+        run: |
+          TAG="${{ steps.check_updates.outputs.upstream_tag }}"
+          if ! git ls-remote --tags origin | grep -q "refs/tags/$TAG"; then
+            echo "Tag $TAG does not exist on remote. Creating..."
+            git tag "$TAG"
+            git push origin "$TAG"
+          else
+            echo "Tag $TAG already exists on remote."
           fi
 
       - name: Create GitHub Release
@@ -148,9 +154,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.check_updates.outputs.upstream_tag }}"
-          echo "Creating GitHub Release for $TAG..."
-          gh release create "$TAG" \
-            --repo ${{ github.repository }} \
-            --title "Release $TAG" \
-            --notes "Automated build synced from upstream BloopAI/vibe-kanban $TAG. Includes True DinD wrapper and updated dependencies." \
-            --verify-tag || echo "Release $TAG already exists or could not be created."
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Creating GitHub Release for $TAG..."
+            gh release create "$TAG" \
+              --repo ${{ github.repository }} \
+              --title "Release $TAG" \
+              --notes "Automated build synced from upstream BloopAI/vibe-kanban $TAG. Includes True DinD wrapper and updated dependencies."
+          else
+            echo "Release $TAG already exists."
+          fi
