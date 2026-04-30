@@ -97,7 +97,42 @@ export GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}"
 
 docker compose $CADDY_PROFILE up -d
 
-echo "Stack started successfully. Tailing logs..."
+echo "Monitoring startup status..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    echo "--------------------------------------------------------"
+    echo "Service Status ($(date +%H:%M:%S)) - Attempt $((RETRY_COUNT+1))/$MAX_RETRIES"
+    docker compose $CADDY_PROFILE ps --format "table {{.Service}}\t{{.Status}}\t{{.Health}}"
+    
+    # Check health of the main app server
+    SERVER_CONTAINER=$(docker compose $CADDY_PROFILE ps -q remote-server)
+    if [ -n "$SERVER_CONTAINER" ]; then
+        HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$SERVER_CONTAINER" 2>/dev/null || echo "starting")
+        
+        if [ "$HEALTH" == "healthy" ]; then
+            echo "--------------------------------------------------------"
+            echo "✅ remote-server is HEALTHY. Vibe Kanban is ready!"
+            echo "Access your instance at: https://$DOMAIN"
+            if [ "$USE_EXTERNAL_PROXY" != "true" ] && [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$DOMAIN" == *"local"* ]]; then
+                 echo "Note: Download the SSL Root CA from your appdata if you see a certificate warning."
+            fi
+            break
+        fi
+        
+        if [ "$HEALTH" == "unhealthy" ]; then
+            echo "--------------------------------------------------------"
+            echo "❌ remote-server is UNHEALTHY. Check logs below for errors."
+            break
+        fi
+    fi
+
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    sleep 10
+done
+
+echo "--------------------------------------------------------"
+echo "Tailing internal logs (Ctrl+C to stop viewing logs, container will keep running)..."
 docker compose $CADDY_PROFILE logs -f
 
 # If compose exits, stop the docker daemon
