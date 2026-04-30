@@ -57,7 +57,7 @@ services:
         condition: service_healthy
 
   remote-server:
-    image: ghcr.io/rorar/vibe-kanban-server:latest
+    image: postgres:16-alpine
     restart: unless-stopped
     ports:
       - "8081:8081"
