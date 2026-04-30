@@ -95,7 +95,24 @@ export GITHUB_OAUTH_CLIENT_SECRET="${GITHUB_OAUTH_CLIENT_SECRET:-}"
 export GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}"
 export GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}"
 
+# Temporarily disable exit on error so we can catch startup failures
+set +e
 docker compose $CADDY_PROFILE up -d
+UP_STATUS=$?
+set -e
+
+if [ $UP_STATUS -ne 0 ]; then
+    echo "--------------------------------------------------------"
+    echo "❌ FATAL: docker-compose failed to start the stack."
+    echo "Fetching logs for remote-server to diagnose the issue:"
+    echo "------------------- REMOTE-SERVER LOGS -----------------"
+    docker compose $CADDY_PROFILE logs remote-server
+    echo "--------------------------------------------------------"
+    # Kill daemon and exit
+    kill $DOCKER_PID
+    wait $DOCKER_PID
+    exit 1
+fi
 
 echo "Monitoring startup status..."
 MAX_RETRIES=30
