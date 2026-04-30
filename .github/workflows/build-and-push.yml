@@ -36,9 +36,14 @@ jobs:
           OUR_COMPOSE="./docker-compose.yml"
           
           # Extract versions from compose
-          CADDY_IMG=$(grep -oP 'image:\s*\Kcaddy:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
-          PG_IMG=$(grep -oP 'image:\s*\Kpostgres:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
-          ELEC_IMG=$(grep -oP 'image:\s*\Kelectricsql/electric:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
+          CADDY_IMG=$(grep -oP 'image:\s*\Kcaddy:[^\s]+' "$UPSTREAM_COMPOSE" | head -1 || echo "")
+          PG_IMG=$(grep -oP 'image:\s*\Kpostgres:[^\s]+' "$UPSTREAM_COMPOSE" | head -1 || echo "")
+          ELEC_IMG=$(grep -oP 'image:\s*\Kelectricsql/electric:[^\s]+' "$UPSTREAM_COMPOSE" | head -1 || echo "")
+          
+          # Provide fallbacks if missing upstream
+          CADDY_IMG=${CADDY_IMG:-caddy:2-alpine}
+          PG_IMG=${PG_IMG:-postgres:16-alpine}
+          ELEC_IMG=${ELEC_IMG:-electricsql/electric:1.4.13}
           
           echo "Upstream versions -> Caddy: $CADDY_IMG, Postgres: $PG_IMG, Electric: $ELEC_IMG"
           
