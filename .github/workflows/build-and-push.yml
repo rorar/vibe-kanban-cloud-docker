@@ -42,10 +42,10 @@ jobs:
           
           echo "Upstream versions -> Caddy: $CADDY_IMG, Postgres: $PG_IMG, Electric: $ELEC_IMG"
           
-          # Replace in our compose file
-          sed -i "s|image: caddy:.*|image: $CADDY_IMG|g" "$OUR_COMPOSE"
-          sed -i "s|image: postgres:.*|image: $PG_IMG|g" "$OUR_COMPOSE"
-          sed -i "s|image: electricsql/electric:.*|image: $ELEC_IMG|g" "$OUR_COMPOSE"
+          # Replace in our compose file using service-specific targeting
+          sed -i "/  caddy:/,/image:/ s|image:.*|image: $CADDY_IMG|" "$OUR_COMPOSE"
+          sed -i "/  remote-db:/,/image:/ s|image:.*|image: $PG_IMG|" "$OUR_COMPOSE"
+          sed -i "/  electric:/,/image:/ s|image:.*|image: $ELEC_IMG|" "$OUR_COMPOSE"
           
           # Get upstream latest tag
           UPSTREAM_TAG=$(gh api repos/BloopAI/vibe-kanban/releases/latest --jq '.tag_name' || echo "latest")
