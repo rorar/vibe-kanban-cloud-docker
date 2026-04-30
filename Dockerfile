@@ -5,7 +5,7 @@ RUN apk add --no-cache bash openssl curl jq docker-cli-compose
 WORKDIR /app
 
 COPY entrypoint.sh /app/
-COPY docker-compose.prod.yml /app/
+COPY docker-compose.yml /app/
 
 RUN chmod +x /app/entrypoint.sh
 
