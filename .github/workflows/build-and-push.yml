@@ -35,7 +35,7 @@ jobs:
           UPSTREAM_COMPOSE="./upstream/crates/remote/docker-compose.prod.yml"
           OUR_COMPOSE="./docker-compose.prod.yml"
           
-          # Extract versions
+          # Extract versions from compose
           CADDY_IMG=$(grep -oP 'image:\s*\Kcaddy:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
           PG_IMG=$(grep -oP 'image:\s*\Kpostgres:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
           ELEC_IMG=$(grep -oP 'image:\s*\Kelectricsql/electric:[^\s]+' "$UPSTREAM_COMPOSE" | head -1)
@@ -46,6 +46,11 @@ jobs:
           sed -i "s|image: caddy:.*|image: $CADDY_IMG|g" "$OUR_COMPOSE"
           sed -i "s|image: postgres:.*|image: $PG_IMG|g" "$OUR_COMPOSE"
           sed -i "s|image: electricsql/electric:.*|image: $ELEC_IMG|g" "$OUR_COMPOSE"
+          
+          # Get upstream latest tag
+          UPSTREAM_TAG=$(gh api repos/BloopAI/vibe-kanban/releases/latest --jq '.tag_name' || echo "latest")
+          echo "Upstream latest tag: $UPSTREAM_TAG"
+          echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
           
           # Track upstream commit to trigger build when upstream code changes
           cd upstream
@@ -75,6 +80,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract metadata
+        if: steps.check_updates.outputs.build_needed == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.SERVER_IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ env.WRAPPER_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.check_updates.outputs.upstream_tag }}
+            type=sha
+
       - name: Build and push remote-server
         if: steps.check_updates.outputs.build_needed == 'true'
         uses: docker/build-push-action@v5
@@ -82,7 +100,9 @@ jobs:
           context: ./upstream
           file: ./upstream/crates/remote/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.SERVER_IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.SERVER_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.SERVER_IMAGE_NAME }}:${{ steps.check_updates.outputs.upstream_tag }}
 
       - name: Build and push DinD Wrapper
         if: steps.check_updates.outputs.build_needed == 'true'
@@ -90,16 +110,28 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.WRAPPER_IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.WRAPPER_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.WRAPPER_IMAGE_NAME }}:${{ steps.check_updates.outputs.upstream_tag }}
 
       - name: Commit updated versions and SHA
         if: steps.check_updates.outputs.build_needed == 'true' && github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add docker-compose.prod.yml .upstream_sha
           if ! git diff-index --quiet HEAD; then
-            git commit -m "chore: sync upstream dependencies and update SHA [skip ci]"
+            git commit -m "chore: sync upstream dependencies and update to ${{ steps.check_updates.outputs.upstream_tag }} [skip ci]"
             git pull --rebase origin main
-            git push origin main
+            
+            # Create a local tag to match upstream
+            TAG="${{ steps.check_updates.outputs.upstream_tag }}"
+            if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+              git tag "$TAG"
+              git push origin main --tags
+            else
+              git push origin main
+            fi
           fi
