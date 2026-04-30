@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: 
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"
@@ -19,7 +19,7 @@ services:
       - internal_proxy
 
   remote-db:
-    image: 
+    image: postgres:16-alpine
     command: ["postgres", "-c", "wal_level=logical"]
     restart: unless-stopped
     environment:
@@ -36,7 +36,7 @@ services:
       start_period: 5s
 
   electric:
-    image: 
+    image: electricsql/electric:1.4.13
     working_dir: /app
     restart: unless-stopped
     environment:
