@@ -100,5 +100,6 @@ jobs:
           git add docker-compose.prod.yml .upstream_sha
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: sync upstream dependencies and update SHA [skip ci]"
-            git push
+            git pull --rebase origin main
+            git push origin main
           fi
