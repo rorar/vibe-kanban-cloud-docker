@@ -63,8 +63,14 @@ jobs:
           # Check if our compose file was modified
           git diff --quiet "$OUR_COMPOSE" || HAS_DEPS_CHANGED=true
           
-          if [ "$UPSTREAM_SHA" != "$PREV_SHA" ] || [ "$HAS_DEPS_CHANGED" = "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "${{ github.event_name }}" == "push" ]; then
-            echo "Updates found or forced build."
+          # Weekly force build on Sundays between 00:00 and 06:00
+          if [ "$(date +%u)" == "7" ] && [ "$(date +%H)" -lt "6" ]; then
+            WEEKLY_FORCE=true
+            echo "Weekly security rebuild triggered."
+          fi
+          
+          if [ "$UPSTREAM_SHA" != "$PREV_SHA" ] || [ "$HAS_DEPS_CHANGED" = "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "${{ github.event_name }}" == "push" ] || [ "$WEEKLY_FORCE" == "true" ]; then
+            echo "Updates found, forced build, or weekly security rebuild."
             echo "$UPSTREAM_SHA" > .upstream_sha
             echo "build_needed=true" >> "$GITHUB_OUTPUT"
           else
