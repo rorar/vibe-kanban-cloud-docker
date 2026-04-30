@@ -120,9 +120,13 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             break
         fi
         
-        if [ "$HEALTH" == "unhealthy" ]; then
+        if [ "$HEALTH" == "unhealthy" ] || [ "$HEALTH" == "exited" ]; then
             echo "--------------------------------------------------------"
-            echo "❌ remote-server is UNHEALTHY. Check logs below for errors."
+            echo "❌ remote-server is $HEALTH! Something went wrong."
+            echo "Fetching logs for remote-server to diagnose the issue:"
+            echo "------------------- REMOTE-SERVER LOGS -----------------"
+            docker compose $CADDY_PROFILE logs remote-server
+            echo "--------------------------------------------------------"
             break
         fi
     fi
