@@ -14,8 +14,20 @@ dockerd-entrypoint.sh &
 DOCKER_PID=$!
 
 echo "Waiting for internal Docker daemon to initialize..."
-until docker info >/dev/null 2>&1; do
+TIMEOUT=30
+while ! docker info >/dev/null 2>&1; do
     sleep 1
+    TIMEOUT=$((TIMEOUT-1))
+    if [ $TIMEOUT -le 0 ]; then
+        echo "❌ FATAL: Internal Docker daemon failed to start within 30 seconds."
+        echo "Please ensure the container is running in Privileged mode."
+        exit 1
+    fi
+    # Check if the background process died
+    if ! kill -0 $DOCKER_PID 2>/dev/null; then
+        echo "❌ FATAL: Internal Docker daemon crashed prematurely."
+        exit 1
+    fi
 done
 echo "Internal Docker daemon is ready."
 
