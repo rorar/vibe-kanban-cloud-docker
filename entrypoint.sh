@@ -84,7 +84,10 @@ else
     fi
 
     # Generate Caddyfile
-    echo "$DOMAIN {" > /app/Caddyfile
+    echo "{" > /app/Caddyfile
+    echo "    default_sni $DOMAIN" >> /app/Caddyfile
+    echo "}" >> /app/Caddyfile
+    echo "$DOMAIN {" >> /app/Caddyfile
     if [ -n "$TLS_DIRECTIVE" ]; then
         echo "    $TLS_DIRECTIVE" >> /app/Caddyfile
     fi
