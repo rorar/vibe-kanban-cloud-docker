@@ -63,6 +63,8 @@ jobs:
 
       - name: Sync versions and check for updates
         id: check_updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           UPSTREAM_COMPOSE="./upstream/crates/remote/docker-compose.yml"
           OUR_COMPOSE="./docker-compose.yml"
@@ -84,8 +86,13 @@ jobs:
           sed -i "/^  remote-db:/{n;s|image:.*|image: $PG_IMG|}" "$OUR_COMPOSE"
           sed -i "/^  electric:/{n;s|image:.*|image: $ELEC_IMG|}" "$OUR_COMPOSE"
           
-          # Get upstream latest tag
-          UPSTREAM_TAG=$(gh api repos/BloopAI/vibe-kanban/releases/latest --jq '.tag_name' || echo "latest")
+          # Get upstream latest tag. Never fall back to a placeholder here: a bogus
+          # value would be published as an image tag, a git tag and a release.
+          UPSTREAM_TAG=$(gh api repos/BloopAI/vibe-kanban/releases/latest --jq '.tag_name' || true)
+          if [ -z "$UPSTREAM_TAG" ] || [ "$UPSTREAM_TAG" = "null" ] || [ "$UPSTREAM_TAG" = "latest" ]; then
+            echo "::error::Could not resolve the upstream release tag (got '${UPSTREAM_TAG}'). Refusing to tag the build."
+            exit 1
+          fi
           echo "Upstream latest tag: $UPSTREAM_TAG"
           echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
           
