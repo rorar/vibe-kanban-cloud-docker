@@ -29,6 +29,38 @@ jobs:
           repository: BloopAI/vibe-kanban
           path: upstream
 
+      # Workaround for a broken upstream main.
+      #
+      # BloopAI/vibe-kanban@78580443 ("pnpm audit fixes", #3460) bumped
+      # @tanstack/react-router 1.161.1 -> 1.170.38, which pins router-core to
+      # 1.171.32. There GetMatchRoutesFn changed from returning an object to
+      # returning a tuple, so destructuring it by name no longer type-checks.
+      # Upstream applied the fix to local-web in @d5cbb538 (#3464) but missed
+      # remote-web, which is exactly what crates/remote/Dockerfile builds.
+      #
+      # Drop this step once upstream ships the same fix for remote-web.
+      - name: Patch upstream remote-web for the tuple getMatchedRoutes API
+        run: |
+          FILE="upstream/packages/remote-web/src/app/navigation/AppNavigation.ts"
+          OLD="const { foundRoute, routeParams } = router.getMatchedRoutes(pathname);"
+          NEW="const [, routeParams, foundRoute] = router.getMatchedRoutes(pathname);"
+
+          if grep -qF "$NEW" "$FILE"; then
+            echo "Upstream already uses the tuple API. This step is obsolete and can be removed."
+            exit 0
+          fi
+
+          if ! grep -qF "$OLD" "$FILE"; then
+            echo "::warning file=$FILE::Neither the old nor the patched call site was found. Upstream reworked this code - re-check whether this workaround is still needed."
+            exit 0
+          fi
+
+          sed -i 's|const { foundRoute, routeParams } = router\.getMatchedRoutes(pathname);|const [, routeParams, foundRoute] = router.getMatchedRoutes(pathname);|' "$FILE"
+
+          # Fail loudly rather than handing a still-broken tree to buildx.
+          grep -qF "$NEW" "$FILE"
+          echo "Patched $FILE to destructure getMatchedRoutes as a tuple."
+
       - name: Sync versions and check for updates
         id: check_updates
         run: |
